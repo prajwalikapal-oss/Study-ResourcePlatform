@@ -1,126 +1,44 @@
-// const express = require("express");
-// const mongoose = require("mongoose");
-// const cors = require("cors");
-// require("dotenv").config();
-// // console.log(process.env.MONGO_URI);
-
-// const app = express();
-
-// // Middleware
-// app.use(cors());
-// app.use(express.json());
-
-// // Test route
-// app.get("/", (req, res) => {
-//   res.send("Server is running...");
-// });
-
-// // Connect MongoDB
-// mongoose.connect(process.env.MONGO_URI)
-//   .then(() => console.log("MongoDB Connected"))
-//   .catch((err) => {
-//     console.error("MongoDB Error:", err);
-//     process.exit(1); // stop server if DB fails
-//   });
-
-// // mongoose.connect(process.env.MONGO_URI, {
-// //   family: 4   // Force Node.js to use IPv4 + stable connection instead of of IPv6
-// // })
-// // .then(() => console.log("MongoDB Connected"))
-// // .catch((err) => console.log(err));
-
-// // Start server
-// const PORT = 5000;
-// app.listen(PORT, () => {
-//   console.log(`Server running on port ${PORT}`);
-// });
-
-// // Create API route
-// const User = require("./models/User");
-
-// app.get("/add", async (req, res) => {
-//   try {
-//     const user = new User({
-//       name: "Manas",
-//       email: "manas@test.com"
-//     });
-
-//     await user.save();
-
-//     res.send("User added to DB");
-//   } catch (err) {
-//     res.status(500).send(err.message);
-//   }
-// });
-
-// // Creating POST API
-// app.post("/users", async (req, res) => {
-//   try {
-//     const { name, email } = req.body;
-
-//     const user = new User({
-//       name,
-//       email
-//     });
-
-//     await user.save();
-
-//     res.status(201).json({ message: "User created", user });
-
-//   } catch (err) {
-//     res.status(500).json({ error: err.message });
-//   }
-// });
-
-// // Creating GET route (Backend)
-// app.get("/users", async (req, res) => {
-//   try {
-//     const users = await User.find(); // DB model
-//     res.json(users);
-//   } catch (err) {
-//     res.status(500).json({ error: err.message });
-//   }
-// });
-
-// // Addding DELETE User Feature 
-// app.delete("/users/:id", async (req, res) => {
-//   try {
-//     const id = req.params.id;
-//     await User.findByIdAndDelete(id);
-//     res.json({ message: "User deleted successfully" });
-//   } catch (err) {
-//     res.status(500).json({ error: err.message });
-//   }
-// });
-
-
 // Newer Version
 // ------------------
 
-// For Adding file and uploading support
+// IMPORTS
 const express = require("express");
-const mongoose = require("mongoose");
 const cors = require("cors");
+require("dotenv").config();
+const mongoose = require("mongoose");
+
+// FILE UPLOAD
 const multer = require("multer");
 const path = require("path");
-require("dotenv").config();
+const fs = require("fs");
+
+// MODELS
 const Task = require("./models/Task");
+const Resource = require("./models/Resource");
+const User = require("./models/User");
+
+// AUTH LIBS
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+
 const app = express();
 
 
-// Middleware
-app.use(cors());
-app.use(express.json());
+// FILE UPLOAD SETUP
 
-// IMPORTANT: serve uploaded files
-app.use("/uploads", express.static("uploads"));
+const uploadPath = path.join(__dirname, "uploads");
 
-/* =========================
-   MULTER CONFIG
-========================= */
+if (!fs.existsSync(uploadPath)) {
+  fs.mkdirSync(uploadPath, { recursive: true });
+}
+
+// Serve uploaded files
+app.use("/uploads", express.static(uploadPath));
+
+// Multer config
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, "uploads/");
+    cb(null, uploadPath);
   },
   filename: (req, file, cb) => {
     cb(null, Date.now() + path.extname(file.originalname));
@@ -129,9 +47,34 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
-/* =========================
-   MONGODB CONNECT
-========================= */
+
+// CORS
+
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://study-resource-platform.vercel.app",
+  "https://study-resourceplatform.onrender.com"
+];
+
+app.use(cors({
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  }
+}));
+
+
+// MIDDLEWARE
+
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+
+// DATABASE
+
 mongoose
   .connect(process.env.MONGO_URI)
   .then(() => console.log("MongoDB Connected"))
@@ -139,31 +82,133 @@ mongoose
     console.log("MongoDB Error:", err);
   });
 
-/* =========================
-   MODEL
-========================= */
-const Resource = require("./models/Resource"); // (we will rename later)
 
-/* =========================
-   HOME
-========================= */
+// AUTH MIDDLEWARE
+
+const authMiddleware = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader) {
+    return res.status(401).json({ error: "No token provided" });
+  }
+
+  // Expecting: Bearer TOKEN
+  const token = authHeader.split(" ")[1];
+
+  if (!token) {
+    return res.status(401).json({ error: "Invalid token format" });
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded;
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: "Invalid or expired token" });
+  }
+};
+
+
+// ROUTES
+
+// Home
 app.get("/", (req, res) => {
   res.send("College Resource API Running");
 });
 
-/* =========================
-   CREATE RESOURCE (WITH FILE)
-========================= */
-app.post("/resources", upload.single("file"), async (req, res) => {
+// Health check
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "OK" });
+});
+
+
+// AUTH APIs
+
+// REGISTER
+app.post("/auth/register", async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
+
+    if (!name || !email || !password) {
+      return res.status(400).json({ error: "All fields are required" });
+    }
+
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ error: "User already exists" });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const user = new User({
+      name,
+      email,
+      password: hashedPassword
+    });
+
+    await user.save();
+
+    res.json({ message: "User registered successfully" });
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+// LOGIN
+app.post("/auth/login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ error: "Email and password required" });
+    }
+
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.status(400).json({ error: "User not found" });
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password);
+
+    if (!isMatch) {
+      return res.status(400).json({ error: "Wrong password" });
+    }
+
+    const token = jwt.sign(
+      { userId: user._id },
+      process.env.JWT_SECRET,
+      { expiresIn: "1d" }
+    );
+
+    res.json({ token });
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+// RESOURCE APIs
+
+// CREATE RESOURCE (Protected)
+app.post("/resources", authMiddleware, upload.single("file"), async (req, res) => {
   try {
     const { title, description } = req.body;
 
-    const fileUrl = req.file ? req.file.filename : null;
+    if (!title || !description) {
+      return res.status(400).json({ error: "Title and description required" });
+    }
 
     const resource = new Resource({
-      name: title,
-      email: description,
-      fileUrl: fileUrl
+      title,
+      description,
+      fileUrl: req.file ? req.file.filename : null,
+      userId: req.user.userId,
+      subject: req.body.subject || "General",
+      resourceType: req.body.resourceType || "Notes"
     });
 
     await resource.save();
@@ -178,40 +223,117 @@ app.post("/resources", upload.single("file"), async (req, res) => {
   }
 });
 
-/* =========================
-   GET ALL RESOURCES
-========================= */
-app.get("/resources", async (req, res) => {
+
+// GET RESOURCES (User-specific)
+app.get("/resources", authMiddleware, async (req, res) => {
   try {
-    const resources = await Resource.find();
+    // const resources = await Resource.find({
+    //   userId: req.user.userId
+    // }).sort({ createdAt: -1 });
+    const resources = await Resource.find({}).sort({ createdAt: -1 });
+
     res.json(resources);
+
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-/* =========================
-   DELETE RESOURCE
-========================= */
-app.delete("/resources/:id", async (req, res) => {
+
+// DELETE RESOURCE (Secure)
+app.delete("/resources/:id", authMiddleware, async (req, res) => {
   try {
-    await Resource.findByIdAndDelete(req.params.id);
+    const deleted = await Resource.findOneAndDelete({
+      _id: req.params.id,
+      // userId: req.user.userId
+    });
+
+    if (!deleted) {
+      return res.status(404).json({ error: "Resource not found or unauthorized" });
+    }
+
     res.json({ message: "Deleted successfully" });
+
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-/* =========================
-   TASK APIs
-========================= */
+// DOWNLOAD COUNTER
+app.post("/resources/:id/download", authMiddleware, async (req, res) => {
+  try {
+    const resource = await Resource.findByIdAndUpdate(
+      req.params.id,
+      { $inc: { downloadCount: 1 } },
+      { new: true }
+    );
+    if (!resource) {
+      return res.status(404).json({ error: "Resource not found" });
+    }
+    res.json({ downloadCount: resource.downloadCount });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
-// Create Task
+// RATE RESOURCE
+app.post("/resources/:id/rate", authMiddleware, async (req, res) => {
+  try {
+    const { stars } = req.body;
+
+    if (!stars || stars < 1 || stars > 5) {
+      return res.status(400).json({ error: "Stars must be between 1 and 5" });
+    }
+
+    const resource = await Resource.findById(req.params.id);
+
+    if (!resource) {
+      return res.status(404).json({ error: "Resource not found" });
+    }
+
+    // Check if user already rated
+    const existingRating = resource.ratings.find(
+      r => r.userId.toString() === req.user.userId.toString()
+    );
+
+    if (existingRating) {
+      // Update existing rating
+      existingRating.stars = stars;
+    } else {
+      // Add new rating
+      resource.ratings.push({ userId: req.user.userId, stars });
+    }
+
+    await resource.save();
+
+    res.json({
+      message: "Rating saved!",
+      avgRating: resource.avgRating,
+      totalRatings: resource.ratings.length
+    });
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// TASK APIs
+
+// CREATE TASK
 app.post("/tasks", async (req, res) => {
   try {
-    const { text } = req.body;
+    const { text, subject, priority, dueDate } = req.body;
 
-    const task = new Task({ text });
+    if (!text) {
+      return res.status(400).json({ error: "Task text required" });
+    }
+
+    const task = new Task({
+      text,
+      subject: subject || "General",
+      priority: priority || "medium",
+      dueDate: dueDate || null
+    });
     await task.save();
 
     res.status(201).json(task);
@@ -221,10 +343,10 @@ app.post("/tasks", async (req, res) => {
   }
 });
 
-// Get All Tasks
+// GET TASKS
 app.get("/tasks", async (req, res) => {
   try {
-    const tasks = await Task.find();
+    const tasks = await Task.find().sort({ createdAt: -1 });
     res.json(tasks);
 
   } catch (err) {
@@ -232,7 +354,8 @@ app.get("/tasks", async (req, res) => {
   }
 });
 
-// Update Route
+
+// UPDATE TASK
 app.put("/tasks/:id", async (req, res) => {
   try {
     const updatedTask = await Task.findByIdAndUpdate(
@@ -242,17 +365,36 @@ app.put("/tasks/:id", async (req, res) => {
     );
 
     res.json(updatedTask);
+
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-/* 
-   START SERVER
- */
+
+// DELETE TASK
+app.delete("/tasks/:id", async (req, res) => {
+  try {
+    await Task.findByIdAndDelete(req.params.id);
+    res.json({ message: "Task deleted" });
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+// ERROR HANDLER
+app.use((err, req, res, next) => {
+  console.error("SERVER ERROR:", err);
+  res.status(500).json({ error: "Server error" });
+});
+
+
+// START SERVER
+
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, "0.0.0.0", () => {
   console.log("Server running on port", PORT);
 });
-
