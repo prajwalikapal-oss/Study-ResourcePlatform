@@ -44,7 +44,10 @@ function AuthPage({ onLogin }) {
       if (!res.ok) { setErr(data.error || "Something went wrong"); return; }
       if (mode === "login") {
         localStorage.setItem("sn_token", data.token);
-        localStorage.setItem("sn_user", JSON.stringify({ email, name: email.split("@")[0] }));
+        localStorage.setItem("sn_user", JSON.stringify({ 
+        email, 
+        name: data.name || email.split("@")[0] 
+        }));
         onLogin();
       } else {
         setMode("login");
@@ -59,7 +62,7 @@ function AuthPage({ onLogin }) {
   return (
     <div className="auth-bg">
       <div className="auth-card">
-        <div className="auth-logo">Study<span>Nest</span></div>
+        <div className="auth-logo">Edu<span>Flow</span></div>
         <p className="auth-sub">Your all-in-one study companion</p>
 
         <div className="auth-tabs">
@@ -108,7 +111,7 @@ function Dashboard({ resources, tasks }) {
       <div className="topbar">
         <div>
           <h2 className="page-title">Good day, {user?.name || "Student"} 👋</h2>
-          <p className="page-sub">BCA Final Year · Let's keep studying!</p>
+          <p className="page-sub">Let's keep studying! 📚</p>
         </div>
       </div>
 
@@ -345,6 +348,7 @@ function ResourcesPage({ resources, onRefresh, toast }) {
                     ? <a className="btn btn-primary btn-sm"
                         href={`${API}/uploads/${r.fileUrl}`}
                         target="_blank" rel="noreferrer"
+                        download
                         onClick={()=>trackDownload(r._id)}>⬇ Download</a>
                     : <span className="tag tag-muted">No file</span>
                   }
@@ -885,6 +889,7 @@ export default function App() {
   const [resources, setResources] = useState([]);
   const [tasks,     setTasks]     = useState([]);
   const [toastMsg,  setToastMsg]  = useState("");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Wake up Render backend on app load
   useEffect(() => {
@@ -942,9 +947,59 @@ export default function App() {
 
   return (
     <div className="app-shell">
+
+      {/* TOP NAVBAR */}
+      <div style={{
+        position:"fixed", top:0, left:0, right:0, height:"56px",
+        background:"var(--card)", borderBottom:"1px solid var(--border)",
+        display:"flex", alignItems:"center", justifyContent:"space-between",
+        padding:"0 20px", zIndex:140
+      }}>
+        {/* LEFT — Hamburger + Logo */}
+        <div style={{display:"flex",alignItems:"center",gap:"14px"}}>
+          <button onClick={()=>setSidebarOpen(o=>!o)}
+            style={{
+              background:"none", border:"1px solid var(--border)",
+              borderRadius:"8px", padding:"6px 10px", cursor:"pointer",
+              fontSize:"18px", color:"var(--text)", lineHeight:1
+            }}>☰</button>
+          <div className="logo" style={{fontSize:"20px",margin:0}}>Edu<span>Flow</span></div>
+        </div>
+
+        {/* RIGHT — User name + Logout */}
+        <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
+          <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
+            <div className="avatar" style={{width:"30px",height:"30px",fontSize:"12px"}}>
+              {(user?.name||"U")[0].toUpperCase()}
+            </div>
+            <span style={{fontSize:"13px",fontWeight:600,color:"var(--text)"}}>
+              {user?.name||"Student"}
+            </span>
+          </div>
+          <button className="btn btn-ghost btn-sm" onClick={logout}>🚪 Logout</button>
+        </div>
+      </div>
+
+      {/* OVERLAY */}
+      {sidebarOpen && (
+        <div onClick={()=>setSidebarOpen(false)}
+          style={{
+            position:"fixed", inset:0, background:"rgba(0,0,0,.5)",
+            zIndex:150, backdropFilter:"blur(2px)"
+          }}/>
+      )}
+
       {/* SIDEBAR */}
-      <nav className="sidebar">
-        <div className="logo">Study<span>Nest</span></div>
+      <nav className="sidebar" style={{
+        transform: sidebarOpen ? "translateX(0)" : "translateX(-100%)",
+        transition: "transform .3s ease",
+        zIndex:160
+      }}>
+        {/* Sidebar header */}
+        <div style={{display:"flex",justifyContent:"flex-end",marginBottom:"24px"}}>
+          <button onClick={()=>setSidebarOpen(false)}
+            style={{background:"none",border:"none",color:"var(--muted)",fontSize:"22px",cursor:"pointer"}}>✕</button>
+        </div>
         {navItems.map((n,i)=>
           n===null
             ? <hr key={i} className="nav-divider"/>
@@ -957,10 +1012,9 @@ export default function App() {
             <div className="avatar">{(user?.name||"U")[0].toUpperCase()}</div>
             <div>
               <div style={{fontSize:"13px",fontWeight:600}}>{user?.name||"Student"}</div>
-              <div style={{fontSize:"11px",color:"var(--muted)"}}>BCA Final Year</div>
+              <div style={{fontSize:"11px",color:"var(--muted)"}}>Student</div>
             </div>
           </div>
-          <button className="btn btn-ghost btn-sm" style={{width:"100%",marginTop:"8px"}} onClick={logout}>🚪 Logout</button>
         </div>
       </nav>
 
