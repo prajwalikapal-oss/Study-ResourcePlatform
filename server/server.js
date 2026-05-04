@@ -1,7 +1,4 @@
-// Newer Version
-// ------------------
-
-// IMPORTS
+// ================= IMPORTS =================
 const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
@@ -24,7 +21,7 @@ const jwt = require("jsonwebtoken");
 const app = express();
 
 
-// FILE UPLOAD SETUP
+// ================= FILE UPLOAD SETUP =================
 
 const uploadPath = path.join(__dirname, "uploads");
 
@@ -48,7 +45,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 
-// CORS
+// ================= CORS =================
 
 const allowedOrigins = [
   "http://localhost:5173",
@@ -67,13 +64,13 @@ app.use(cors({
 }));
 
 
-// MIDDLEWARE
+// ================= MIDDLEWARE =================
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 
-// DATABASE
+// ================= DATABASE =================
 
 mongoose
   .connect(process.env.MONGO_URI)
@@ -83,7 +80,7 @@ mongoose
   });
 
 
-// AUTH MIDDLEWARE
+// ================= AUTH MIDDLEWARE =================
 
 const authMiddleware = (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -109,7 +106,7 @@ const authMiddleware = (req, res, next) => {
 };
 
 
-// ROUTES
+// ================= ROUTES =================
 
 // Home
 app.get("/", (req, res) => {
@@ -122,7 +119,7 @@ app.get("/health", (req, res) => {
 });
 
 
-// AUTH APIs
+// ================= AUTH APIs =================
 
 // REGISTER
 app.post("/auth/register", async (req, res) => {
@@ -183,7 +180,7 @@ app.post("/auth/login", async (req, res) => {
       { expiresIn: "1d" }
     );
 
-    res.json({ token });
+    res.json({ token, name: user.name });
 
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -191,7 +188,7 @@ app.post("/auth/login", async (req, res) => {
 });
 
 
-// RESOURCE APIs
+// ================= RESOURCE APIs =================
 
 // CREATE RESOURCE (Protected)
 app.post("/resources", authMiddleware, upload.single("file"), async (req, res) => {
@@ -265,7 +262,8 @@ app.post("/resources/:id/download", authMiddleware, async (req, res) => {
     const resource = await Resource.findByIdAndUpdate(
       req.params.id,
       { $inc: { downloadCount: 1 } },
-      { new: true }
+      //{ new: true }
+      { returnDocument: 'after' }
     );
     if (!resource) {
       return res.status(404).json({ error: "Resource not found" });
@@ -317,7 +315,7 @@ app.post("/resources/:id/rate", authMiddleware, async (req, res) => {
   }
 });
 
-// TASK APIs
+// ================= TASK APIs =================
 
 // CREATE TASK
 app.post("/tasks", async (req, res) => {
@@ -361,7 +359,8 @@ app.put("/tasks/:id", async (req, res) => {
     const updatedTask = await Task.findByIdAndUpdate(
       req.params.id,
       { completed: req.body.completed },
-      { new: true }
+      // { new: true }
+      { returnDocument: 'after' }
     );
 
     res.json(updatedTask);
@@ -384,14 +383,15 @@ app.delete("/tasks/:id", async (req, res) => {
 });
 
 
-// ERROR HANDLER
+// ================= ERROR HANDLER =================
+
 app.use((err, req, res, next) => {
   console.error("SERVER ERROR:", err);
   res.status(500).json({ error: "Server error" });
 });
 
 
-// START SERVER
+// ================= START SERVER =================
 
 const PORT = process.env.PORT || 5000;
 
