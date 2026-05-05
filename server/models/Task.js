@@ -23,6 +23,10 @@ const taskSchema = new mongoose.Schema({
   dueDate: {
     type: String,
     default: null
+  },
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User"
   }
 }, {
   timestamps: true
