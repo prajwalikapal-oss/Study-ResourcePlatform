@@ -318,7 +318,7 @@ app.post("/resources/:id/rate", authMiddleware, async (req, res) => {
 // ================= TASK APIs =================
 
 // CREATE TASK
-app.post("/tasks", async (req, res) => {
+app.post("/tasks", authMiddleware, async (req, res) => {
   try {
     const { text, subject, priority, dueDate } = req.body;
 
@@ -330,7 +330,8 @@ app.post("/tasks", async (req, res) => {
       text,
       subject: subject || "General",
       priority: priority || "medium",
-      dueDate: dueDate || null
+      dueDate: dueDate || null,
+      userId: req.user.userId
     });
     await task.save();
 
@@ -342,9 +343,9 @@ app.post("/tasks", async (req, res) => {
 });
 
 // GET TASKS
-app.get("/tasks", async (req, res) => {
+app.get("/tasks", authMiddleware, async (req, res) => {
   try {
-    const tasks = await Task.find().sort({ createdAt: -1 });
+    const tasks = await Task.find({ userId: req.user.userId }).sort({ createdAt: -1 });
     res.json(tasks);
 
   } catch (err) {
@@ -354,15 +355,13 @@ app.get("/tasks", async (req, res) => {
 
 
 // UPDATE TASK
-app.put("/tasks/:id", async (req, res) => {
+app.put("/tasks/:id", authMiddleware, async (req, res) => {
   try {
-    const updatedTask = await Task.findByIdAndUpdate(
-      req.params.id,
+    const updatedTask = await Task.findOneAndUpdate(
+      { _id: req.params.id, userId: req.user.userId },
       { completed: req.body.completed },
-      // { new: true }
       { returnDocument: 'after' }
     );
-
     res.json(updatedTask);
 
   } catch (err) {
@@ -372,9 +371,9 @@ app.put("/tasks/:id", async (req, res) => {
 
 
 // DELETE TASK
-app.delete("/tasks/:id", async (req, res) => {
+app.delete("/tasks/:id", authMiddleware, async (req, res) => {
   try {
-    await Task.findByIdAndDelete(req.params.id);
+    await Task.findOneAndDelete({ _id: req.params.id, userId: req.user.userId });
     res.json({ message: "Task deleted" });
 
   } catch (err) {
