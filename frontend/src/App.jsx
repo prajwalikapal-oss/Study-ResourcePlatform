@@ -455,7 +455,7 @@ function TasksPage({ tasks, onRefresh, toast }) {
     try {
       await fetch(`${API}/tasks`, {
         method:"POST",
-        headers:{"Content-Type":"application/json"},
+        headers:{"Content-Type":"application/json", ...authHeaders()},
         body: JSON.stringify({ text, subject, priority, dueDate: dueDate||null }),
       });
       setText(""); setSubject("General"); setPriority("medium"); setDueDate("");
@@ -468,7 +468,7 @@ function TasksPage({ tasks, onRefresh, toast }) {
     try {
       await fetch(`${API}/tasks/${id}`, {
         method:"PUT",
-        headers:{"Content-Type":"application/json"},
+        headers:{"Content-Type":"application/json", ...authHeaders()},
         body: JSON.stringify({ completed: !completed }),
       });
       onRefresh();
@@ -477,7 +477,7 @@ function TasksPage({ tasks, onRefresh, toast }) {
 
   const del = async (id) => {
     try {
-      await fetch(`${API}/tasks/${id}`, { method:"DELETE" });
+      await fetch(`${API}/tasks/${id}`, { method:"DELETE", headers: authHeaders() });
       onRefresh(); toast("🗑 Task deleted");
     } catch { toast("❌ Delete failed"); }
   };
@@ -914,7 +914,8 @@ export default function App() {
 
   const fetchTasks = async () => {
     try {
-      const res = await fetch(`${API}/tasks`);
+      const res = await fetch(`${API}/tasks`, { headers: authHeaders() });
+      if (res.status===401) { logout(); return; }
       const data = await res.json();
       setTasks(Array.isArray(data) ? data : []);
     } catch {}
