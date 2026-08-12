@@ -1,4 +1,4 @@
-Site Link: study-resource-platform.vercel.app
+Site Link: https://study-resource-platform.vercel.app/
 
 Render: https://dashboard.render.com/web/srv-d7rnjcvlk1mc73d9uio0/events
 
